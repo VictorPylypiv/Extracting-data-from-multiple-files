@@ -61,20 +61,26 @@ for det, file in det_list_files.items():
                 table_header += table_header_2[2:5] + table_header_2[9:12]
                 table_header.append('qty per det')
                 '''
-                # calc_data = []
                 for row in ws.iter_rows(min_row=2, min_col=2, max_row=ws.max_row, max_col=12, values_only=True):
                     if row[0]:
                         r1 = row[1]  # check if part#
                         if not r1:
                             r1 = 1
                         qty = int(row[2]) * int(row[9])
-                        calc_data_1 = [r1, row[2], row[3], row[8], row[9], row[10], qty]
-                        calc_data.append(calc_data_1)
-        wb.close()
-    else:
-        empty_list.append(det)
 
-    det_data[det].append(calc_data)
+                        for i in calc_data[:]:      # repetition check
+                            if i[0] == r1:
+                                i[1] += row[2]
+                                i[6] += qty
+                                row = None
+                        if row:
+                            calc_data_1 = [r1, row[2], row[3], row[8], row[9], row[10], qty]
+                            calc_data.append(calc_data_1)
+        wb.close()
+        det_data[det].append(calc_data)
+    else:
+        empty_list.append(det_data.get(det))
+
 
 # create and fill calculations data file
 wb = Workbook()
@@ -82,16 +88,27 @@ ws = wb.active
 ws.append(TABLE_HEADER)
 
 for det in det_data:
-    l = len(det_data[det][3])
-    for i in range(0, l):
-        row = [det]
-        if i > 0:
-            row = ['_']
-        for r in det_data[det][0:3]:
-            row.append(r)
-        for c in det_data[det][3][i]:
-            row.append(c)
-        ws.append(row)
+    if len(det_data[det]) > 3:
+        l = len(det_data[det][3])
+        for i in range(0, l):
+            row = [det]
+            if i > 0:
+                row = ['_']
+            for r in det_data[det][0:3]:
+                row.append(r)
+            for c in det_data[det][3][i]:
+                row.append(c)
+            ws.append(row)
+
+if empty_list:
+    ws2 = wb.create_sheet(title='empty')
+    ws2['A1'] = 'Without calculation'
+    ws2.append(TABLE_HEADER[1:4])
+    for d in empty_list:
+        ws2.append(d)
+
+    ws2.column_dimensions['A'].width = 12
+    ws2.column_dimensions['B'].width = 18
 
 ws.column_dimensions['A'].width = 28
 ws.column_dimensions['B'].width = 12
