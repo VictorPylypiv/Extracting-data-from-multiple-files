@@ -9,6 +9,10 @@ from os.path import abspath
 from openpyxl import load_workbook, Workbook
 from def_xls import *
 
+from openpyxl.formatting import Rule
+from openpyxl.styles import Font, PatternFill, Border
+from openpyxl.styles.differential import DifferentialStyle
+
 # get details list from xls file
 date = '220401'
 table_name = f'det_list_{date}.xlsx'
@@ -23,6 +27,7 @@ ws_t = wb[s_name]
 table_header = get_table_header(ws_t)
 '''
 
+ord_list = []
 det_list = []
 det_data = {}
 for row in ws_t.iter_rows(min_row=2, min_col=1, max_row=ws_t.max_row,
@@ -31,6 +36,8 @@ for row in ws_t.iter_rows(min_row=2, min_col=1, max_row=ws_t.max_row,
     if key_data is not None:
         det_data[key_data] = [cell for cell in row[1::]]
         det_list.append(key_data)
+        if row[1] not in ord_list:
+            ord_list.append(row[1])
 
 wb.close()
 
@@ -82,6 +89,43 @@ for det, file in det_list_files.items():
         empty_list.append(det_data.get(det))
 
 
+# if the part has a semi-finished product, we must replace the material with it
+# from the directory of semi-finished products get file names according to the order list
+path_hf = '\\halffabricat_orders\\'
+list_hf_files = os.listdir('.' + path_hf)
+
+# select the files that are in the order list
+list_hf_files_d = []
+for f in list_hf_files:
+    d = f.removesuffix('.xlsx')
+    if int(d) in ord_list:
+        list_hf_files_d.append(f)
+
+# get data from semi-finished products
+hf_data = {}
+for file in list_hf_files_d:
+    data_path = abspath(join('.' + '\\halffabricat_orders\\', file))
+    wb = load_workbook(filename=data_path, data_only=True, read_only=True)
+    s_name = list(wb.sheetnames)
+    for sn in s_name:
+        if sn == 'Аркуш1':
+            ws = wb[sn]
+            for row in ws.iter_rows(min_row=4, min_col=1, max_row=ws.max_row, max_col=5, values_only=True):
+                if row[0]:
+                    r1 = str(row[0]) + '_' + str(row[1])
+                    if r1 not in hf_data.keys():
+                        hf_data[r1] = []
+                    hf_data[r1].append([row[2], row[4]])
+
+# replace the material with semi-finished product
+for hf in hf_data.keys():
+    if hf in det_data.keys():
+        for hf_val in hf_data.get(hf):
+            for v in det_data.get(hf)[3]:
+                if hf_val[0] == v[0]:
+                    v[3], v[6] = 'halffabricat', int(hf_val[1] / det_data.get(hf)[2])
+
+
 # create and fill calculations data file
 wb = Workbook()
 ws = wb.active
@@ -118,6 +162,10 @@ ws.column_dimensions['G'].width = 22
 ws.column_dimensions['H'].width = 18
 ws.column_dimensions['I'].width = 12
 ws.column_dimensions['K'].width = 12
+
+dxf = DifferentialStyle(fill=PatternFill(fill_type='solid', start_color='ffff00', end_color='ffff00'))
+rule = Rule(operator='equal', type='containsText', text='halffabricat', dxf=dxf)
+ws.conditional_formatting.add("H1:H10000", rule)
 
 new_file = f'calculations_{date}.xlsx'
 new_file_name = abspath(join('.', 'calculation_data', new_file))
